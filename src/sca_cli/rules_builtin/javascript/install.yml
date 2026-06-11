@@ -1,0 +1,10 @@
+rules:
+  - id: JS-INSTALL-002
+    name: install script downloads remote code
+    category: install_script
+    severity: critical
+    globs: ["package.json", "**/package.json"]
+    patterns:
+      - "\"(preinstall|install|postinstall|prepare|prepublish)\"\\s*:\\s*\"[^\"]*(curl|wget|powershell|iwr|bash -c|node -e)"
+    description: npm lifecycle script appears to download or execute remote code.
+    remediation: Remove install-time network or shell execution.

@@ -1,0 +1,43 @@
+rules:
+  - id: JS-HIGHAPI-001
+    name: Use of eval or Function constructor
+    category: high_risk_api
+    severity: high
+    globs: ["**/*.js", "**/*.ts", "**/*.mjs", "**/*.cjs"]
+    patterns:
+      - "\\beval\\s*\\("
+      - "new\\s+Function\\s*\\("
+      - "\\bFunction\\s*\\("
+    description: Dynamic JavaScript execution is risky in Agent Skill packages.
+    remediation: Replace dynamic code execution with fixed dispatch or safe parsing.
+  - id: JS-HIGHAPI-002
+    name: child_process execution
+    category: high_risk_api
+    severity: high
+    globs: ["**/*.js", "**/*.ts", "**/*.mjs", "**/*.cjs"]
+    patterns:
+      - "child_process\\.(exec|spawn|execSync)"
+      - "require\\(['\"]child_process['\"]\\)"
+    description: JavaScript invokes OS command execution.
+    remediation: Avoid command execution; if necessary, use strict allowlists and argument arrays.
+  - id: JS-HIGHAPI-003
+    name: Reads process.env
+    category: high_risk_api
+    severity: medium
+    globs: ["**/*.js", "**/*.ts", "**/*.mjs", "**/*.cjs"]
+    patterns:
+      - "process\\.env"
+    description: Code reads environment variables, which may contain secrets.
+    remediation: Limit environment access and document required variables.
+  - id: JS-NET-001
+    name: Sends data to external URL
+    category: high_risk_api
+    severity: medium
+    globs: ["**/*.js", "**/*.ts", "**/*.mjs", "**/*.cjs"]
+    patterns:
+      - "fetch\\s*\\("
+      - "axios\\.post\\s*\\("
+      - "https\\.request\\s*\\("
+      - "http\\.request\\s*\\("
+    description: Code performs outbound network calls.
+    remediation: Validate destinations and require user approval for data transfer.

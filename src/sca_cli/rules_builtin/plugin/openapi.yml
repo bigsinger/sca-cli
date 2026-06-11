@@ -1,0 +1,13 @@
+rules:
+  - id: PLUGIN-OPENAPI-001
+    name: OpenAPI exposes high-risk administrative operation
+    category: openapi_risk
+    severity: medium
+    globs: ["openapi.yaml", "openapi.yml", "openapi.json", "**/openapi.yaml", "**/openapi.yml", "**/openapi.json"]
+    patterns:
+      - "\\bDELETE\\b"
+      - "/admin"
+      - "/token"
+      - "/export"
+    description: Plugin API surface includes operations that may expose destructive or sensitive behavior.
+    remediation: Review authentication, authorization, and user confirmation for high-risk API operations.

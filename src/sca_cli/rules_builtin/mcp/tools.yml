@@ -1,0 +1,52 @@
+rules:
+  - id: MCP-TOOL-001
+    name: Tool accepts arbitrary file path
+    category: mcp_tool
+    severity: high
+    globs: ["**/*.json", "**/*.yaml", "**/*.yml", "**/*.py", "**/*.ts", "**/*.js"]
+    patterns:
+      - "\"?(file_?path|filepath|path|directory|dir)\"?\\s*:"
+      - "(file_?path|filepath|directory)\\s*="
+    description: Tool schema or code appears to accept arbitrary filesystem paths.
+    remediation: Validate paths against an allowlist and require explicit user selection.
+  - id: MCP-TOOL-002
+    name: Tool accepts arbitrary URL
+    category: mcp_tool
+    severity: high
+    globs: ["**/*.json", "**/*.yaml", "**/*.yml", "**/*.py", "**/*.ts", "**/*.js"]
+    patterns:
+      - "\"?(url|callback|target|endpoint)\"?\\s*:"
+      - "(url|callback|endpoint)\\s*="
+    description: Tool schema or code appears to accept arbitrary network targets.
+    remediation: Validate URL scheme and host allowlists; block metadata and localhost access by default.
+  - id: MCP-TOOL-003
+    name: Tool accepts SQL query
+    category: mcp_tool
+    severity: high
+    globs: ["**/*.json", "**/*.yaml", "**/*.yml", "**/*.py", "**/*.ts", "**/*.js"]
+    patterns:
+      - "\"?(sql|query)\"?\\s*:"
+      - "execute\\s*\\(\\s*(sql|query)"
+    description: Tool appears to accept raw SQL or query text.
+    remediation: Replace raw SQL input with parameterized, constrained operations.
+  - id: MCP-TOOL-004
+    name: Tool accepts arbitrary command
+    category: mcp_tool
+    severity: critical
+    globs: ["**/*.json", "**/*.yaml", "**/*.yml", "**/*.py", "**/*.ts", "**/*.js"]
+    patterns:
+      - "\"?(command|cmd|shell)\"?\\s*:"
+      - "(command|cmd|shell)\\s*="
+    description: Tool schema or code appears to accept arbitrary command execution input.
+    remediation: Remove arbitrary command execution or restrict to a fixed command allowlist.
+  - id: MCP-TOOL-005
+    name: Tool description contains prompt injection
+    category: mcp_tool
+    severity: high
+    globs: ["**/*.json", "**/*.yaml", "**/*.yml", "**/*.md"]
+    patterns:
+      - "ignore\\s+(all\\s+)?previous\\s+instructions"
+      - "developer\\s+message"
+      - "system\\s+message"
+    description: MCP metadata contains prompt injection indicators.
+    remediation: Remove prompt-manipulation content from tool descriptions.

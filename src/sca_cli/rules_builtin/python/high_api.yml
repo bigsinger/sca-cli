@@ -1,0 +1,52 @@
+rules:
+  - id: PY-HIGHAPI-001
+    name: Use of eval or exec
+    category: high_risk_api
+    severity: high
+    globs: ["**/*.py"]
+    patterns:
+      - "\\beval\\s*\\("
+      - "\\bexec\\s*\\("
+    description: Dynamic Python code execution is risky in Agent Skill packages.
+    remediation: Replace dynamic execution with explicit parsing or fixed dispatch.
+  - id: PY-HIGHAPI-002
+    name: Use of subprocess or os.system
+    category: high_risk_api
+    severity: high
+    globs: ["**/*.py"]
+    patterns:
+      - "os\\.system\\s*\\("
+      - "subprocess\\.(Popen|call|run)\\s*\\("
+    description: Python code invokes shell or subprocess execution.
+    remediation: Avoid shell execution; if required, use argument lists and strict validation.
+  - id: PY-HIGHAPI-003
+    name: pickle.loads usage
+    category: high_risk_api
+    severity: medium
+    globs: ["**/*.py"]
+    patterns:
+      - "pickle\\.loads\\s*\\("
+      - "pickle\\.load\\s*\\("
+    description: Pickle deserialization can execute attacker-controlled code.
+    remediation: Do not load pickle data from untrusted sources.
+  - id: PY-HIGHAPI-004
+    name: yaml.load without safe loader
+    category: high_risk_api
+    severity: medium
+    globs: ["**/*.py"]
+    patterns:
+      - "yaml\\.load\\s*\\("
+    description: yaml.load may construct unsafe Python objects if SafeLoader is not used.
+    remediation: Use yaml.safe_load or yaml.load with SafeLoader.
+  - id: PY-SECRET-001
+    name: Reads secret-bearing files
+    category: high_risk_api
+    severity: high
+    globs: ["**/*.py"]
+    patterns:
+      - "\\.env"
+      - "id_rsa"
+      - "\\.pypirc"
+      - "\\.npmrc"
+    description: Code references files that commonly contain credentials.
+    remediation: Avoid reading credentials from scanned package code unless explicitly required and documented.

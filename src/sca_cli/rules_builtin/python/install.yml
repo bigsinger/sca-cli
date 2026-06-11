@@ -1,0 +1,23 @@
+rules:
+  - id: PY-INSTALL-001
+    name: setup.py executes shell command
+    category: install_script
+    severity: critical
+    globs: ["setup.py", "**/setup.py"]
+    patterns:
+      - "os\\.system\\s*\\("
+      - "subprocess\\.(Popen|call|run)\\s*\\("
+    description: Python setup script executes shell commands during installation.
+    remediation: Remove install-time command execution from setup.py.
+  - id: PY-INSTALL-002
+    name: setup.py downloads remote script
+    category: install_script
+    severity: critical
+    globs: ["setup.py", "**/setup.py"]
+    patterns:
+      - "curl\\s+"
+      - "wget\\s+"
+      - "requests\\.(get|post)\\s*\\("
+      - "urllib\\.request"
+    description: Python setup script appears to download remote code or data.
+    remediation: Do not download or execute remote resources at install time.

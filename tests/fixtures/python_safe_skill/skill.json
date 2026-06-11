@@ -1,0 +1,4 @@
+{
+  "name": "safe-weather",
+  "description": "Fetches weather data after user provides a city."
+}

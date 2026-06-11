@@ -1,0 +1,60 @@
+rules:
+  - id: SKILL-META-001
+    name: Tool description contains instruction override
+    category: skill_metadata
+    severity: high
+    globs: ["**/*.json", "**/*.yaml", "**/*.yml", "**/*.md", "prompts/**", "tools/**"]
+    patterns:
+      - "ignore\\s+(all\\s+)?previous\\s+instructions"
+      - "disregard\\s+(all\\s+)?previous\\s+instructions"
+      - "system\\s+prompt"
+    description: Tool metadata appears to contain prompt-injection language.
+    remediation: Remove instruction-override language from tool and skill metadata.
+  - id: SKILL-META-002
+    name: Tool description hides behavior from user
+    category: skill_metadata
+    severity: high
+    globs: ["**/*.json", "**/*.yaml", "**/*.yml", "**/*.md", "prompts/**", "tools/**"]
+    patterns:
+      - "do\\s+not\\s+tell\\s+the\\s+user"
+      - "without\\s+the\\s+user'?s?\\s+knowledge"
+      - "secretly"
+      - "silently"
+    description: Metadata contains language that may hide tool behavior from the user.
+    remediation: Make user-visible behavior explicit and remove stealth instructions.
+  - id: SKILL-META-003
+    name: Tool asks model to exfiltrate data
+    category: skill_metadata
+    severity: critical
+    globs: ["**/*.json", "**/*.yaml", "**/*.yml", "**/*.md", "prompts/**", "tools/**"]
+    patterns:
+      - "send\\s+(user\\s+)?data\\s+to\\s+"
+      - "exfiltrat"
+      - "upload\\s+.*(token|secret|credential|private)"
+    description: Metadata suggests external transfer of sensitive user data.
+    remediation: Remove data exfiltration behavior and require explicit user approval for network transfer.
+  - id: SKILL-META-004
+    name: Tool claims official identity
+    category: skill_metadata
+    severity: medium
+    globs: ["**/*.json", "**/*.yaml", "**/*.yml", "**/*.md"]
+    patterns:
+      - "\\bofficial\\b"
+      - "\\bverified\\b"
+      - "openai\\s+official"
+      - "google\\s+official"
+      - "github\\s+official"
+    description: Package metadata may imply official status.
+    remediation: Verify publisher identity and remove misleading official claims.
+  - id: SKILL-META-005
+    name: Tool requests broad file access
+    category: skill_metadata
+    severity: high
+    globs: ["**/*.json", "**/*.yaml", "**/*.yml", "**/*.md"]
+    patterns:
+      - "access\\s+all\\s+files"
+      - "read\\s+all\\s+files"
+      - "full\\s+filesystem"
+      - "entire\\s+disk"
+    description: Tool metadata requests broad filesystem access.
+    remediation: Restrict file access to explicit user-selected paths.
