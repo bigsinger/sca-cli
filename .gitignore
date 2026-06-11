@@ -13,3 +13,5 @@ venv/
 .sca-cli/
 .tmp-sca-home/
 reports/
+data/
+target/

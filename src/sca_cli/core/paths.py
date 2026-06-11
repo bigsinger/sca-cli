@@ -19,10 +19,27 @@ class AppPaths:
     logs: Path
 
 
+DEFAULT_DATA_DIR = "data"
+
+
 def default_home() -> Path:
+    """Resolve default data directory.
+
+    Resolution order (first match wins):
+    1. SCA_CLI_HOME environment variable
+    2. ./data/ (project-local, parallel to src/)
+    3. ~/.sca-cli (system-wide fallback)
+    """
     env_home = os.environ.get("SCA_CLI_HOME")
     if env_home:
         return Path(env_home).expanduser()
+
+    # Project-local: check if CWD has a data/ directory with a DB
+    local_data = Path.cwd() / DEFAULT_DATA_DIR
+    if local_data.is_dir() and (local_data / "sca-cli.db").exists():
+        return local_data
+
+    # System-wide fallback
     return Path.home() / ".sca-cli"
 
 

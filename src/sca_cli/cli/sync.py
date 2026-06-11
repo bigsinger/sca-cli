@@ -139,19 +139,95 @@ def _sync_spdx(connection, *, verify: bool, proxy: str | None, timeout: int) -> 
 
 
 def _sync_osv(connection, cache: Path, *, verify: bool, proxy: str | None, timeout: int) -> int:
+    import os as _os
+
     cache.mkdir(parents=True, exist_ok=True)
     total = 0
+    BATCH = 500
+    now = utc_now_iso()
+
     for ecosystem, url in OSV_ZIPS.items():
         archive = cache / f"osv-{ecosystem}.zip"
-        archive.write_bytes(_http_get_bytes(url, verify=verify, proxy=proxy, timeout=timeout))
+        if archive.exists():
+            console.print(f"  [dim]Using cached {archive.name} ({archive.stat().st_size // 1024 // 1024}MB)[/dim]")
+        else:
+            console.print(f"  Downloading {archive.name}...")
+            archive.write_bytes(_http_get_bytes(url, verify=verify, proxy=proxy, timeout=timeout))
+
+        # Collect normalized records
+        records: list[dict[str, Any]] = []
         with zipfile.ZipFile(archive) as zf:
             for name in zf.namelist():
                 if not name.endswith(".json"):
                     continue
                 payload = json.loads(zf.read(name).decode("utf-8"))
-                _upsert_vulnerability(connection, _normalize_osv(payload, ecosystem))
-                total += 1
-    connection.commit()
+                records.append(_normalize_osv(payload, ecosystem))
+
+        console.print(f"  Normalized {len(records)} OSV ({ecosystem}) records. Inserting...")
+
+        # Build insert rows
+        vuln_rows: list[tuple] = []
+        aliases_rows: list[tuple] = []
+        affected_rows: list[tuple] = []
+        for item in records:
+            pid = item.get("primary_id")
+            if not pid:
+                continue
+            vuln_rows.append((
+                pid, item.get("title"), item.get("description"), item.get("severity"),
+                item.get("cvss_score"), item.get("cvss_vector"), item.get("cwe"),
+                item.get("published_at"), item.get("modified_at"), item.get("source"),
+                item.get("references_json"), item.get("remediation"), item.get("raw_json"),
+                pid, now, now,
+            ))
+            for alias in item.get("aliases") or []:
+                aliases_rows.append((pid, alias, "osv"))
+            for aff in item.get("affected") or []:
+                affected_rows.append((
+                    pid,
+                    str(aff.get("ecosystem") or "").lower(),
+                    aff.get("package_name"),
+                    aff.get("purl"),
+                    dumps(aff.get("fixed_versions") or []),
+                    "osv", now, now,
+                ))
+
+        # Batch INSERT OR REPLACE vulnerabilities
+        for i in range(0, len(vuln_rows), BATCH):
+            connection.executemany(
+                """INSERT OR REPLACE INTO vulnerabilities (
+                  primary_id, title, description, severity, cvss_score, cvss_vector, cwe,
+                  published_at, modified_at, source, references_json, remediation, raw_json,
+                  created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                  COALESCE((SELECT created_at FROM vulnerabilities WHERE primary_id = ?), ?), ?)
+                """,
+                vuln_rows[i : i + BATCH],
+            )
+        connection.commit()
+
+        # Batch insert aliases
+        for i in range(0, len(aliases_rows), BATCH):
+            connection.executemany(
+                """INSERT OR IGNORE INTO vulnerability_aliases (vulnerability_id, alias, source)
+                   VALUES ((SELECT id FROM vulnerabilities WHERE primary_id = ?), ?, ?)""",
+                aliases_rows[i : i + BATCH],
+            )
+        connection.commit()
+
+        # Batch insert affected packages
+        for i in range(0, len(affected_rows), BATCH):
+            connection.executemany(
+                """INSERT OR IGNORE INTO affected_packages (
+                  vulnerability_id, ecosystem, package_name, purl, fixed_versions_json, source, created_at, updated_at
+                ) VALUES ((SELECT id FROM vulnerabilities WHERE primary_id = ?), ?, ?, ?, ?, ?, ?, ?)""",
+                affected_rows[i : i + BATCH],
+            )
+        connection.commit()
+
+        total += len(vuln_rows)
+        console.print(f"  -> {len(vuln_rows)} vulnerabilities from {ecosystem}")
+
     return total
 
 
@@ -220,6 +296,10 @@ def _normalize_nvd(cve: dict[str, Any]) -> dict[str, Any]:
 
 
 def _sync_ghsa(connection, cache: Path, config: dict[str, Any]) -> int:
+    import os as _os
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from functools import partial
+
     git_cmd = config["external_tools"].get("git", "git")
     if which(git_cmd) is None:
         raise RuntimeError("git not found; cannot sync GHSA advisory database")
@@ -228,12 +308,138 @@ def _sync_ghsa(connection, cache: Path, config: dict[str, Any]) -> int:
         run_tool([git_cmd, "-C", str(repo), "pull", "--ff-only"], timeout_seconds=600)
     else:
         run_tool([git_cmd, "clone", "--depth", "1", GHSA_REPO, str(repo)], timeout_seconds=900)
+
+    # Collect JSON file paths first (fast walk)
+    json_paths: list[str] = []
+    advisories_dir = _os.fspath(repo / "advisories")
+    console.print("  Indexing GHSA advisory files...")
+    for search_dir in ["github-reviewed", "unreviewed"]:
+        target = _os.path.join(advisories_dir, search_dir)
+        if not _os.path.isdir(target):
+            continue
+        for root, _dirs, files in _os.walk(target):
+            for fname in files:
+                if fname.endswith(".json"):
+                    json_paths.append(_os.path.join(root, fname))
+
+    # Read + parse in parallel (much faster on Windows)
+    console.print(f"  Reading & parsing {len(json_paths)} JSON files...")
+
+    def _read_ghsa(path: str) -> dict | None:
+        try:
+            with open(path, encoding="utf-8") as fh:
+                return _normalize_ghsa(json.load(fh))
+        except Exception:
+            return None  # skip corrupt/invalid files
+
+    records: list[dict[str, Any]] = []
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = [pool.submit(_read_ghsa, p) for p in json_paths]
+        done = 0
+        for f in as_completed(futures):
+            result = f.result()
+            if result:
+                records.append(result)
+            done += 1
+            if done % 10000 == 0:
+                console.print(f"    ... {done}/{len(json_paths)} processed")
+
+    console.print(f"  Normalized {len(records)} GHSA records. Inserting in batch...")
+
+    # Pre-build all INSERT rows
+    now = utc_now_iso()
+    aliases_by_id: dict[str, list[str]] = {}
+    affected_by_id: dict[str, list[dict]] = {}
+    vuln_rows: list[tuple] = []
+    for item in records:
+        pid = item.get("primary_id")
+        if not pid:
+            continue
+        vuln_rows.append((
+            pid,
+            item.get("title"),
+            item.get("description"),
+            item.get("severity"),
+            item.get("cvss_score"),
+            item.get("cvss_vector"),
+            item.get("cwe"),
+            item.get("published_at"),
+            item.get("modified_at"),
+            item.get("source"),
+            item.get("references_json"),
+            item.get("remediation"),
+            item.get("raw_json"),
+            pid,
+            now,
+            now,
+        ))
+        aliases = item.get("aliases") or []
+        if aliases:
+            aliases_by_id[pid] = aliases
+        affected = item.get("affected") or []
+        if affected:
+            affected_by_id[pid] = affected
+
+    BATCH = 500
+
+    # Batch INSERT OR REPLACE vulnerabilities
     total = 0
-    for path in (repo / "advisories" / "github-reviewed").rglob("*.json"):
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        _upsert_vulnerability(connection, _normalize_ghsa(payload))
-        total += 1
+    for i in range(0, len(vuln_rows), BATCH):
+        batch = vuln_rows[i : i + BATCH]
+        connection.executemany(
+            """INSERT OR REPLACE INTO vulnerabilities (
+              primary_id, title, description, severity, cvss_score, cvss_vector, cwe,
+              published_at, modified_at, source, references_json, remediation, raw_json,
+              created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+              COALESCE((SELECT created_at FROM vulnerabilities WHERE primary_id = ?), ?), ?)
+            """,
+            batch,
+        )
+        connection.commit()
+        total += len(batch)
+
+    # Clear old GHSA aliases (in case of re-sync)
+    connection.execute("DELETE FROM vulnerability_aliases WHERE vulnerability_id IN (SELECT id FROM vulnerabilities WHERE source = 'ghsa')")
     connection.commit()
+
+    # Batch insert aliases
+    alias_rows: list[tuple] = []
+    for pid, aliases in aliases_by_id.items():
+        for alias in aliases:
+            alias_rows.append((pid, alias, "ghsa"))
+    for i in range(0, len(alias_rows), BATCH):
+        connection.executemany(
+            """INSERT OR IGNORE INTO vulnerability_aliases (vulnerability_id, alias, source)
+               VALUES ((SELECT id FROM vulnerabilities WHERE primary_id = ?), ?, ?)""",
+            alias_rows[i : i + BATCH],
+        )
+    connection.commit()
+
+    # Batch insert affected packages
+    affected_rows: list[tuple] = []
+    for pid, affected_list in affected_by_id.items():
+        for aff in affected_list:
+            affected_rows.append((
+                pid,
+                str(aff.get("ecosystem") or "").lower(),
+                aff.get("package_name"),
+                aff.get("purl"),
+                dumps(aff.get("fixed_versions") or []),
+                "ghsa",
+                now,
+                now,
+            ))
+    for i in range(0, len(affected_rows), BATCH):
+        connection.executemany(
+            """INSERT OR IGNORE INTO affected_packages (
+              vulnerability_id, ecosystem, package_name, purl, fixed_versions_json, source, created_at, updated_at
+            ) VALUES ((SELECT id FROM vulnerabilities WHERE primary_id = ?), ?, ?, ?, ?, ?, ?, ?)""",
+            affected_rows[i : i + BATCH],
+        )
+    connection.commit()
+
+    console.print(f"  GHSA sync complete: {total} vulnerabilities imported.")
     return total
 
 
@@ -254,7 +460,7 @@ def _normalize_ghsa(payload: dict[str, Any]) -> dict[str, Any]:
         "primary_id": payload.get("id") or payload.get("ghsa_id"),
         "title": payload.get("summary"),
         "description": payload.get("details") or payload.get("description"),
-        "severity": (payload.get("severity") or "info").lower(),
+        "severity": _normalize_ghsa_severity(payload.get("database_specific", {}).get("severity")),
         "published_at": payload.get("published_at"),
         "modified_at": payload.get("updated_at") or payload.get("modified_at"),
         "source": "ghsa",
@@ -264,6 +470,40 @@ def _normalize_ghsa(payload: dict[str, Any]) -> dict[str, Any]:
         "aliases": aliases,
     }
 
+
+def _normalize_ghsa_severity(severity: Any) -> str:
+    """Normalize GHSA severity which can be a string, list of objects, or None."""
+    if severity is None:
+        return "info"
+    if isinstance(severity, str):
+        return severity.lower()
+    if isinstance(severity, list):
+        for item in severity:
+            if isinstance(item, dict):
+                s = item.get("type", "")
+                s_lower = s.lower()
+                # Check for severity keywords in type
+                if "critical" in s_lower: return "critical"
+                if "high" in s_lower: return "high"
+                if "medium" in s_lower: return "medium"
+                if "low" in s_lower: return "low"
+                # score can be "CVSS:3.1/AV:N/AC:L/..." vector string
+                score = item.get("score")
+                if score:
+                    # Try direct float parse (legacy format)
+                    try:
+                        fs = float(score)
+                        if fs >= 9.0: return "critical"
+                        if fs >= 7.0: return "high"
+                        if fs >= 4.0: return "medium"
+                        if fs > 0: return "low"
+                    except ValueError:
+                        pass
+                    # CVSS vector string: extract base score from end
+                    cvss_score = _cvss_score(score)
+                    if cvss_score is not None:
+                        return _severity_from_score(cvss_score)
+    return "info"
 
 def _sync_aig(cache: Path, rules_root: Path, config: dict[str, Any]) -> int:
     git_cmd = config["external_tools"].get("git", "git")

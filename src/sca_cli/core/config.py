@@ -31,10 +31,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "git": "git",
     },
     "sync": {
-        "enabled_sources": ["osv", "ghsa", "nvd", "spdx", "aig"],
+        "enabled_sources": ["osv", "spdx"],
         "nvd_api_key": None,
         "proxy": None,
-        "timeout_seconds": 60,
+        "timeout_seconds": 300,
     },
     "rules": {
         "enabled_categories": [

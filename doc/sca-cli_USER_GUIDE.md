@@ -100,24 +100,24 @@ python -m sca_cli.main scan ./target
 
 ### 2.2 数据目录结构
 
-默认数据目录 `~/.sca-cli`，可通过 `--home` 参数自定义：
+默认数据目录 `./data/`（项目根目录下，与 `src/` 同级），可通过 `--home` 参数或 `SCA_CLI_HOME` 环境变量覆盖：
 
 ```
-~/.sca-cli/
-├── sca-cli.db          # SQLite 主数据库（漏洞库 + 许可证库）
-├── config.yaml         # 用户配置文件
+data/                         # 数据根目录（与 src/ 同级）
+├── sca-cli.db                # SQLite 主数据库（漏洞库 + 许可证库）
+├── config.yaml               # 用户配置文件
 ├── cache/
-│   ├── osv-pypi.zip    # OSV PyPI 缓存（~24 MB）
-│   ├── osv-npm.zip     # OSV npm 缓存（~200 MB）
-│   ├── spdx-licenses.json  # SPDX 许可证缓存
+│   ├── osv-pypi.zip          # OSV PyPI 缓存（~24 MB）
+│   ├── osv-npm.zip           # OSV npm 缓存（~200 MB）
+│   ├── spdx-licenses.json    # SPDX 许可证缓存
 │   └── github-advisory-database/  # GHSA Git 仓库（~800 MB）
 ├── rules/
-│   └── ai-infra/       # AIG 导入规则
-├── reports/            # 扫描报告输出目录
-├── downloads/          # URL 下载的临时文件
-├── workspaces/         # 解压/克隆的工作区
-├── sbom/               # SBOM 输出目录
-└── logs/               # 运行日志
+│   └── ai-infra/             # AIG 导入规则
+├── reports/                  # 扫描报告输出目录
+├── downloads/                # URL 下载的临时文件
+├── workspaces/               # 解压/克隆的工作区
+├── sbom/                     # SBOM 输出目录
+└── logs/                     # 运行日志
 ```
 
 ### 2.3 配置文件
