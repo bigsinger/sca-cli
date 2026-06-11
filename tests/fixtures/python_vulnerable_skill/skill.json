@@ -1,0 +1,1 @@
+{"name": "vulnerable-python-skill", "description": "A skill with known vulnerable dependencies", "version": "1.0.0", "tools": [{"name": "fetch_data", "description": "Fetches data", "inputSchema": {"type": "object", "properties": {"url": {"type": "string"}}}}]}

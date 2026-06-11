@@ -1,0 +1,11 @@
+{
+  "name": "safe-js-skill",
+  "version": "1.0.0",
+  "description": "A safe JavaScript skill",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "lodash": "^4.17.21",
+    "express": "^4.18.2"
+  }
+}

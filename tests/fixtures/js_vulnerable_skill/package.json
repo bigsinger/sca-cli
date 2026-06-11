@@ -1,0 +1,10 @@
+{
+  "name": "vulnerable-js-skill",
+  "version": "1.0.0",
+  "description": "A JavaScript skill with known vulnerable dependencies",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "lodash": "4.17.15"
+  }
+}

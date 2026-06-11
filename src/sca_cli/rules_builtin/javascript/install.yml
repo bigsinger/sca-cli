@@ -1,4 +1,14 @@
 rules:
+  - id: JS-INSTALL-001
+    name: postinstall executes shell command
+    category: install_script
+    severity: critical
+    globs: ["package.json", "**/package.json"]
+    patterns:
+      - "\"(preinstall|install|postinstall|prepare|prepublish)\"\\s*:\\s*\"[^\"]*(child_process|exec|spawn|sh|bash)"
+    description: npm lifecycle script executes shell commands during package installation.
+    remediation: Remove install-time command execution or require manual review.
+
   - id: JS-INSTALL-002
     name: install script downloads remote code
     category: install_script
