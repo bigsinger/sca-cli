@@ -26,10 +26,13 @@
 - 输入处理：本地目录、本地 zip/tar/tgz、Git URL、HTTP/HTTPS 归档 URL。
 - zip/tar 安全解压，阻止路径穿越和 tar link 成员。
 - 项目识别：Python、JavaScript/TypeScript、MCP、AI Plugin、Agent Skill、mixed。
-- SBOM：优先调用 Syft；Syft 缺失时使用内置轻量解析器生成 CycloneDX JSON。
+- SBOM：优先调用 Syft；Syft 缺失时使用内置轻量解析器 + 代码级依赖分析 + 外部系统依赖检测 + 漏洞注入生成完整 CycloneDX 1.6 SBOM。
 - 漏洞扫描：`--vuln` 时调用 Grype、pip-audit、npm audit；工具缺失时记录 warning 并继续。
 - 规则扫描：Skill/MCP/Plugin 元数据、安装脚本、高危 Python/JS API。
 - findings 归一化、去重、风险评分。
+- 代码级依赖分析：自动扫描 JS/Python 源码中的 require/import 语句提取依赖，无需 lockfile。
+- 外部系统依赖检测：自动扫描文档/代码中的 pg_dump/gzip/psql 等 40+ 种 CLI 工具引用。
+- 漏洞注入 SBOM：扫描完成后将 findings 转换为 CycloneDX vulnerabilities[] 字段写入 SBOM。
 - 报告输出：HTML、Markdown、JSON；报告目录包含 `sbom.cyclonedx.json` 和 `raw/` 原始扫描器输出。
 
 ### P1 建议完成 — 全部完成
@@ -157,6 +160,7 @@ python -m pytest -v
 - `tests/fixtures/js_vulnerable_skill/` — 漏洞 JS 示例
 - `tests/fixtures/mcp_prompt_injection/` — Prompt 注入 MCP 示例
 - `tests/fixtures/mixed_python_js_skill/` — Python+JS 混合示例
+- `src/sca_cli/scanners/code_deps.py` — 代码级依赖分析 + 外部系统依赖检测
 
 ## 外部工具降级行为
 
@@ -176,3 +180,4 @@ python -m pytest -v
 6. PDF 报告输出（Playwright/WeasyPrint）。
 7. CI/CD 模式（exit code 策略、GitHub Action）。
 8. Web UI 管理界面。
+9. 更精准的版本号推测（从注释/文档中提取版本提示）。

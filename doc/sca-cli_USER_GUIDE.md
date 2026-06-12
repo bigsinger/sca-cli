@@ -1,8 +1,8 @@
 # sca-cli 用户使用手册
 
-> 版本：v2.0
+> 版本：v2.1
 > 适用对象：安全工程师 / 开发工程师 / DevOps / AI Agent 平台运营
-> 最后更新：2026-06-11
+> 最后更新：2026-06-12
 
 ---
 
@@ -205,7 +205,7 @@ sca-cli scan ./target --vuln --fail-on high --json
 | `--name` | 自动 | 项目名称 |
 | `--type` | auto | 项目类型：auto/python/javascript/mcp/plugin |
 | `--skill-mode` | auto | Skill 模式：agent/mcp/plugin/auto |
-| `--sbom` | 开启 | 生成 CycloneDX SBOM |
+| `--sbom` | 开启 | 生成 CycloneDX SBOM（含漏洞和组件信息） |
 | `--no-sbom` | — | 跳过 SBOM 生成 |
 | `--vuln` | 关闭 | 启用漏洞扫描 |
 | `--rules` | 开启 | 启用规则扫描 |
@@ -218,6 +218,11 @@ sca-cli scan ./target --vuln --fail-on high --json
 | `--offline` | 关闭 | 离线模式（跳过网络扫描器） |
 | `--home` | ~/.sca-cli | 数据目录路径 |
 | `--json` | 关闭 | 输出 JSON 格式结果 |
+
+> **SBOM 新增能力（v2.1）：**
+> - **代码级依赖分析** — 自动扫描 `require`/`import` 语句提取依赖，即使没有 lockfile 也能发现完整依赖树
+> - **外部系统依赖** — 识别 pg_dump、psql、gzip 等 CLI 工具，以 `type=application` 组件形式纳入 SBOM
+> - **漏洞信息集成** — 在 CycloneDX `vulnerabilities[]` 字段中输出，与扫描发现合并，一份文件包含全部数据
 
 ### 3.4 `sca-cli sync`
 
@@ -365,6 +370,16 @@ sca-cli 支持多种输入类型：
 - remediation: 修复建议
 - source: 发现引擎（Grype/pip-audit/规则引擎等）
 ```
+
+### 5.4 SBOM 内容说明
+
+SBOM（Software Bill of Materials）以 CycloneDX 1.5 格式输出，存储于 `{report_dir}/sbom/` 目录。扫描报告中的「组件与 SBOM」章节概述了以下内容：
+
+- **组件清单（components[]）** — 列出所有检测到的依赖组件，包含组件名、版本号、类型、许可证信息
+- **代码级依赖** — 自动扫描源码中的 `require`/`import` 语句，即使项目缺少 lockfile 也能提取依赖树
+- **外部系统依赖** — 识别运行环境所需的 CLI 工具依赖（如 pg_dump、psql、gzip 等），以 `type=application` 组件形式呈现
+- **漏洞信息（vulnerabilities[]）** — 在 CycloneDX 标准的 `vulnerabilities[]` 字段中输出，与扫描发现的漏洞数据合并，一份 `.json` 文件包含完整的组件清单与漏洞信息
+- **SBOM 输出文件**：`{report_dir}/sbom/{project}-sbom.json`
 
 ---
 
