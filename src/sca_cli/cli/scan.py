@@ -123,6 +123,11 @@ def scan_command(
                 findings.extend(scan_npm_audit(context))
         findings = dedupe_findings(findings)
         summary = summarize_findings(components, findings)
+        # Enrich SBOM with vulnerability findings so the CycloneDX document
+        # becomes a standalone artifact containing both components and vulns.
+        if sbom_path and sbom_path.exists():
+            from sca_cli.scanners.syft import enrich_sbom_with_vulns  # noqa: PLC0415
+            enrich_sbom_with_vulns(sbom_path, findings)
         finished_at = utc_now_iso()
         result = _result_dict(
             scan_id=scan_id,
